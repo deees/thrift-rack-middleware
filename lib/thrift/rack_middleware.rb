@@ -59,15 +59,24 @@ module Thrift
       set_logger(env)
       request = ::Rack::Request.new(env)
       # Need to add in more logging about the thrift object that was sent in if possible.
-      request.logger.info "/rpc_api called"
+      request.logger.info "#{@hook_path} called"
       if request.post? && request.path == hook_path
         output = StringIO.new
         transport = IOStreamTransport.new(request.body, output)
         protocol = @protocol_factory.get_protocol(transport)
-        @processor.process(protocol, protocol)
+        begin
+          @processor.process(protocol, protocol)
+        rescue
+          request.logger.error "There was an error processing the thrift request!"
+          request.body.rewind
+          request.logger.error "  request body: #{request.body.read}"
+          output.rewind
+          request.logger.error "  output: #{output.read}"
+          raise $! # reraise the exception
+        end
 
         output.rewind
-        response = Rack::Response.new(output)
+        response = ::Rack::Response.new(output)
         response["Content-Type"] = "application/x-thrift"
         response.finish
       else
