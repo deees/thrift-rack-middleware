@@ -52,10 +52,14 @@ module Thrift
       @processor        = options[:processor] || (raise ArgumentError, "You have to specify a processor.")
       @protocol_factory = options[:protocol_factory] || BinaryProtocolFactory.new
       @hook_path        = options[:hook_path] || "/rpc_api"
+      @logger           = options[:logger]
     end
 
     def call(env)
+      set_logger(env)
       request = ::Rack::Request.new(env)
+      # Need to add in more logging about the thrift object that was sent in if possible.
+      request.logger.info "/rpc_api called"
       if request.post? && request.path == hook_path
         output = StringIO.new
         transport = IOStreamTransport.new(request.body, output)
@@ -69,6 +73,16 @@ module Thrift
       else
         @app.call(env)
       end
+    end
+
+    def set_logger(env)
+      env['rack.logger'] = if @logger
+                             @logger
+                           elsif defined?(Rails) && Rails.logger
+                             Rails.logger
+                           else
+                             Logger.new(STDOUT)
+                           end
     end
   end
 end
