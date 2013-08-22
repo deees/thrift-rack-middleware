@@ -55,7 +55,7 @@ module Thrift
     end
 
     def call(env)
-      request = Rack::Request.new(env)
+      request = ::Rack::Request.new(env)
       if request.post? && request.path == hook_path
         output = StringIO.new
         transport = IOStreamTransport.new(request.body, output)
