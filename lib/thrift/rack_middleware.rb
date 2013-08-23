@@ -52,23 +52,51 @@ module Thrift
       @processor        = options[:processor] || (raise ArgumentError, "You have to specify a processor.")
       @protocol_factory = options[:protocol_factory] || BinaryProtocolFactory.new
       @hook_path        = options[:hook_path] || "/rpc_api"
+      @logger           = options[:logger]
     end
 
     def call(env)
-      request = Rack::Request.new(env)
+      set_logger(env)
+      request = ::Rack::Request.new(env)
+      # Need to add in more logging about the thrift object that was sent in if possible.
       if request.post? && request.path == hook_path
+        # Try to parse the method called from the request body
+        rpc_method = request.body.read.match(/(?<method_name>[a-z_0-9]+)/i).try { |match| match[:method_name] }
+        request.body.rewind
+        request.logger.info "[#{Time.now}] #{@hook_path} called with method: #{rpc_method}"
+        start_time = Time.now
         output = StringIO.new
         transport = IOStreamTransport.new(request.body, output)
         protocol = @protocol_factory.get_protocol(transport)
-        @processor.process(protocol, protocol)
-
+        begin
+          @processor.process(protocol, protocol)
+        rescue
+          request.logger.error "There was an error processing the thrift request!"
+          request.body.rewind
+          request.logger.error "  request body: #{request.body.read}"
+          output.rewind
+          request.logger.error "  output: #{output.read}"
+          raise $! # reraise the exception
+        end
+        
+        request.logger.info "  Total time taken processing RPC request for #{rpc_method}: #{Time.now - start_time} seconds"
         output.rewind
-        response = Rack::Response.new(output)
+        response = ::Rack::Response.new(output)
         response["Content-Type"] = "application/x-thrift"
         response.finish
       else
         @app.call(env)
       end
+    end
+
+    def set_logger(env)
+      env['rack.logger'] = if @logger
+                             @logger
+                           elsif defined?(Rails) && Rails.logger
+                             Rails.logger
+                           else
+                             Logger.new(STDOUT)
+                           end
     end
   end
 end
