@@ -59,8 +59,12 @@ module Thrift
       set_logger(env)
       request = ::Rack::Request.new(env)
       # Need to add in more logging about the thrift object that was sent in if possible.
-      request.logger.info "#{@hook_path} called"
       if request.post? && request.path == hook_path
+        # Try to parse the method called from the request body
+        rpc_method = request.body.read.match(/(?<method_name>[a-z_0-9]+)/i).try { |match| match[:method_name] }
+        request.body.rewind
+        request.logger.info "[#{Time.now}] #{@hook_path} called with method: #{rpc_method}"
+        start_time = Time.now
         output = StringIO.new
         transport = IOStreamTransport.new(request.body, output)
         protocol = @protocol_factory.get_protocol(transport)
@@ -74,7 +78,8 @@ module Thrift
           request.logger.error "  output: #{output.read}"
           raise $! # reraise the exception
         end
-
+        
+        request.logger.info "  Total time taken processing RPC request for #{rpc_method}: #{Time.now - start_time} seconds"
         output.rewind
         response = ::Rack::Response.new(output)
         response["Content-Type"] = "application/x-thrift"
