@@ -61,7 +61,8 @@ module Thrift
       # Need to add in more logging about the thrift object that was sent in if possible.
       if request.post? && request.path == hook_path
         # Try to parse the method called from the request body
-        rpc_method = request.body.read.match(/(?<method_name>[a-z_0-9]+)/i).try { |match| match[:method_name] }
+        rpc_method_match = request.body.read.match(/(?<method_name>[a-z_0-9]+)/i)
+        rpc_method = rpc_method_match ? rpc_method_match[:method_name] : 'UNKNOWN'
         request.body.rewind
         request.logger.info "[#{Time.now}] #{@hook_path} called with method: #{rpc_method}"
         start_time = Time.now
