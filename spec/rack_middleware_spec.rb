@@ -79,10 +79,11 @@ require 'thrift/rack_middleware'
 
     it "should log failures" do
       env = {"REQUEST_METHOD" => "POST", "PATH_INFO" => "/rpc_api", "rack.input" => request_body}
+      error = RuntimeError.new('Fake Error')
       @factory.stub(:get_protocol)
-      @processor.stub(:process).and_raise('FakeError')
-      @logger.should_receive(:error)
-      expect { @middleware.call(env) }.to raise_error
+      @processor.stub(:process).and_raise(error)
+      @logger.should_receive(:error).with(error)
+      expect { @middleware.call(env) }.to raise_error(error)
     end
 
     it "should have appropriate defaults for hook_path and protocol_factory" do
