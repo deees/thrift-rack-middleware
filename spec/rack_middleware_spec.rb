@@ -27,10 +27,11 @@ require 'thrift/rack_middleware'
       @processor = double("Processor")
       @factory = double("ProtocolFactory")
       @mock_app = double("AnotherRackApp")
-      @middleware = RackMiddleware.new(@mock_app, :processor => @processor, :protocol_factory => @factory)
+      @logger = double("Logger").as_null_object
+      @middleware = RackMiddleware.new(@mock_app, :processor => @processor, :protocol_factory => @factory, :logger => @logger)
     end
 
-    let(:request_body) { StringIO.new 'test' }
+    let(:request_body) { StringIO.new 'test_method' }
 
     it "should call next rack application in the stack if request was not a post and not pointed to the hook_path" do
       env = {"REQUEST_METHOD" => "GET", "PATH_INFO" => "not_the_hook_path"}
@@ -66,6 +67,22 @@ require 'thrift/rack_middleware'
       response.should_receive(:finish)
       Rack::Response.should_receive(:new).and_return(response)
       @middleware.call(env)
+    end
+
+    it "should log incoming method names" do
+      env = {"REQUEST_METHOD" => "POST", "PATH_INFO" => "/rpc_api", "rack.input" => request_body}
+      @factory.stub(:get_protocol)
+      @processor.stub(:process)
+      @logger.should_receive(:info).twice.with(/test_method/)
+      @middleware.call(env)
+    end
+
+    it "should log failures" do
+      env = {"REQUEST_METHOD" => "POST", "PATH_INFO" => "/rpc_api", "rack.input" => request_body}
+      @factory.stub(:get_protocol)
+      @processor.stub(:process).and_raise('FakeError')
+      @logger.should_receive(:error)
+      expect { @middleware.call(env) }.to raise_error
     end
 
     it "should have appropriate defaults for hook_path and protocol_factory" do
