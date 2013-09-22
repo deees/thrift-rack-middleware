@@ -24,14 +24,12 @@ require 'thrift/rack_middleware'
 
   describe RackMiddleware do
     before(:each) do
-      @processor = double("Processor")
-      @factory = double("ProtocolFactory")
+      @processor = double("Processor", process: nil)
+      @factory = double("ProtocolFactory", get_protocol: double)
       @mock_app = double("AnotherRackApp")
       @logger = double("Logger").as_null_object
       @middleware = RackMiddleware.new(@mock_app, :processor => @processor, :protocol_factory => @factory, :logger => @logger)
     end
-
-    let(:request_body) { StringIO.new 'test_method' }
 
     it "should call next rack application in the stack if request was not a post and not pointed to the hook_path" do
       env = {"REQUEST_METHOD" => "GET", "PATH_INFO" => "not_the_hook_path"}
@@ -40,50 +38,42 @@ require 'thrift/rack_middleware'
       @middleware.call(env)
     end
 
-    it "should serve using application/x-thrift" do
-      env = {"REQUEST_METHOD" => "POST", "PATH_INFO" => "/rpc_api", "rack.input" => request_body}
-      IOStreamTransport.stub(:new)
-      @factory.stub(:get_protocol)
-      @processor.stub(:process)
-      response = double("RackResponse")
-      response.should_receive(:[]=).with("Content-Type", "application/x-thrift")
-      response.should_receive(:finish)
-      Rack::Response.should_receive(:new).and_return(response)
-      @middleware.call(env)
-    end
+    context "thrift request" do
+      let(:request_body) { StringIO.new 'test_method' }
+      let(:env) { {"REQUEST_METHOD" => "POST", "PATH_INFO" => "/rpc_api", "rack.input" => request_body} }
 
-    it "should use the IOStreamTransport" do
-      env = {"REQUEST_METHOD" => "POST", "PATH_INFO" => "/rpc_api", "rack.input" => request_body}
-      output = double("output")
-      output.should_receive(:rewind)
-      StringIO.should_receive(:new).and_return(output)
-      protocol = double("protocol")
-      transport = double("transport")
-      IOStreamTransport.should_receive(:new).with(request_body, output).and_return(transport)
-      @factory.should_receive(:get_protocol).with(transport).and_return(protocol)
-      @processor.should_receive(:process).with(protocol, protocol)
-      response = double("RackResponse")
-      response.stub(:[]=)
-      response.should_receive(:finish)
-      Rack::Response.should_receive(:new).and_return(response)
-      @middleware.call(env)
-    end
+      it "should serve using application/x-thrift" do
+        response = double("RackResponse")
+        response.should_receive(:[]=).with("Content-Type", "application/x-thrift")
+        response.should_receive(:finish)
+        Rack::Response.should_receive(:new).and_return(response)
+        @middleware.call(env)
+      end
 
-    it "should log incoming method names" do
-      env = {"REQUEST_METHOD" => "POST", "PATH_INFO" => "/rpc_api", "rack.input" => request_body}
-      @factory.stub(:get_protocol)
-      @processor.stub(:process)
-      @logger.should_receive(:info).twice.with(/test_method/)
-      @middleware.call(env)
-    end
+      it "should use the IOStreamTransport" do
+        protocol = double("protocol")
+        transport = double("transport")
+        IOStreamTransport.should_receive(:new).with(request_body, instance_of(StringIO)).and_return(transport)
+        @factory.should_receive(:get_protocol).with(transport).and_return(protocol)
+        @processor.should_receive(:process).with(protocol, protocol)
+        response = double("RackResponse")
+        response.stub(:[]=)
+        response.should_receive(:finish)
+        Rack::Response.should_receive(:new).and_return(response)
+        @middleware.call(env)
+      end
 
-    it "should log failures" do
-      env = {"REQUEST_METHOD" => "POST", "PATH_INFO" => "/rpc_api", "rack.input" => request_body}
-      error = RuntimeError.new('Fake Error')
-      @factory.stub(:get_protocol)
-      @processor.stub(:process).and_raise(error)
-      @logger.should_receive(:error).with(error)
-      expect { @middleware.call(env) }.to raise_error(error)
+      it "should log incoming method names" do
+        @logger.should_receive(:info).twice.with(/test_method/)
+        @middleware.call(env)
+      end
+
+      it "should log failures" do
+        error = RuntimeError.new('Fake Error')
+        @processor.stub(:process).and_raise(error)
+        @logger.should_receive(:error).with(error)
+        expect { @middleware.call(env) }.to raise_error(error)
+      end
     end
 
     it "should have appropriate defaults for hook_path and protocol_factory" do
