@@ -21,18 +21,18 @@
 # access via Thrift. You have to insert it into the MiddlewareStack of Rails
 # within a custom initializer and not within the environment, because Thrift
 # is not fully loaded at that point.
-# 
+#
 # Here is a sample of to to use it:
-# 
+#
 #     ActionController::Dispatcher.middleware.insert_before Rails::Rack::Metal, Thrift::RackMiddleware,
 #                                                                               { :processor => YourCustomProcessor.new,
 #                                                                                 :hook_path => "/the_path_to_receive_api_calls",
 #                                                                                 :protocol_factory => Thrift::BinaryProtocolAcceleratedFactory.new }
-# 
+#
 # Some benchmarking showed this is much slower then any Thrift solution without
 # Rails, but it is still fast enough if you need to integrate your Rails app
 # into a Thrift-based infrastructure.
-# 
+#
 begin
   require 'rack'
   require 'rack/response'
@@ -41,8 +41,8 @@ rescue LoadError => e
   Kernel.warn "[WARNING] The Rack library could not be found. Please install it to use the Thrift::RackMiddleware server part."
 end
 
-require "logger"
 require "thrift"
+require "thrift/rack_middleware/logger"
 
 module Thrift
   class RackMiddleware
@@ -58,50 +58,48 @@ module Thrift
 
     def call(env)
       request = ::Rack::Request.new(env)
-      # Need to add in more logging about the thrift object that was sent in if possible.
-      if request.post? && request.path == hook_path
-        logger = find_logger(env)
-        # Try to parse the method called from the request body
-        rpc_method_match = request.body.read.match(/(?<method_name>[a-z_0-9]+)/i)
-        rpc_method = rpc_method_match ? rpc_method_match[:method_name] : 'UNKNOWN'
-        request.body.rewind
-        logger.info "#{@hook_path} called with method: #{rpc_method}"
-        start_time = Time.now
-        output = StringIO.new
-        transport = IOStreamTransport.new(request.body, output)
-        protocol = @protocol_factory.get_protocol(transport)
-        begin
-          @processor.process(protocol, protocol)
-        rescue
-          logger.error "Error processing thrift request"
-          logger.error $!
-          request.body.rewind
-          logger.error "  request body: #{request.body.read}"
-          output.rewind
-          logger.error "  output: #{output.read}"
-          raise $! # reraise the exception
-        end
 
-        logger.info "Total time taken processing RPC request for #{rpc_method}: #{Time.now - start_time} seconds"
-        output.rewind
-        response = ::Rack::Response.new(output)
-        response["Content-Type"] = "application/x-thrift"
-        response.finish
+      if request.post? && request.path == hook_path
+        process(request)
       else
         @app.call(env)
       end
     end
 
-    def find_logger(env)
-      if @logger
-        @logger
-      elsif defined?(Rails) && Rails.logger
-        @logger = Rails.logger
-      elsif env.key? "rack.logger"
-        env["rack.logger"]
-      else
-        @logger = Logger.new(STDOUT)
+    def process(request)
+      logger = Thrift::Rack::Middleware::Logger.new(request.env).or(@logger).create!
+
+      rpc_method = parse_rpc_method(request)
+      logger.log_method_name(rpc_method)
+
+      output = StringIO.new
+      transport = IOStreamTransport.new(request.body, output)
+      protocol = @protocol_factory.get_protocol(transport)
+
+      logger.log_processing_time(rpc_method) do
+        begin
+          @processor.process(protocol, protocol)
+        rescue
+          logger.log_error($!, request, output)
+        end
       end
+
+      return_output(output)
+    end
+
+    def return_output(output)
+      output.rewind
+      response = ::Rack::Response.new(output)
+      response["Content-Type"] = "application/x-thrift"
+      response.finish
+    end
+
+    # Try to parse the method called from the request body
+    def parse_rpc_method(request)
+      rpc_method_match = request.body.read.match(/(?<method_name>[a-z_0-9]+)/i)
+      rpc_method = rpc_method_match ? rpc_method_match[:method_name] : 'UNKNOWN'
+      request.body.rewind
+      rpc_method
     end
   end
 end
