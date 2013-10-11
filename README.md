@@ -2,7 +2,7 @@
 
 A simple rack middleware that can intercept HTTP thrift requests.
 
-This is useful when used in cobination with a pooled application server like passenger.
+This is useful when used in combination with a pooled application server like passenger.
 It is not an easy task to have thrift directly target worker processes that application servers like passenger manage.
 
 Accessing the handler applications via thrift this was may not be the fastest, but it is one of the easier ways to get started.
@@ -20,13 +20,14 @@ If you want to add this middleware to a Rails application, add the following to 
 
 ### Defaults
 
-* `hook_path` defaults to `'/thrift_rpc'`
+* `hook_path` defaults to `'/rpc_api'`
 * `protocol_factory` defaults to `Thrift::BinaryProtocolFactory.new`
 * `logger` see logging section below
 
 #### Logging
-You can optionally pass in a custom logger instance. If your application is a 
-Rails application, Rails.logger will automatically be used. Otherwise, logging
+You can optionally pass in a custom logger instance. If your application is a
+Rails application, Rails.logger will automatically be used. If your application
+is a Rack application, rack logger will automatically be used. Otherwise, logging
 will be directed to STDOUT
 
 ## Future features
