@@ -24,8 +24,8 @@ require 'thrift/rack_middleware'
 
   describe RackMiddleware do
     before(:each) do
-      @processor = double("Processor", process: nil)
-      @factory = double("ProtocolFactory", get_protocol: double)
+      @processor = double("Processor", :process => nil)
+      @factory = double("ProtocolFactory", :get_protocol => double)
       @mock_app = double("AnotherRackApp")
       @logger = double("Logger").as_null_object
       @middleware = RackMiddleware.new(@mock_app, :processor => @processor, :protocol_factory => @factory, :logger => @logger)
