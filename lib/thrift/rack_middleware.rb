@@ -59,7 +59,7 @@ module Thrift
     def call(env)
       request = ::Rack::Request.new(env)
 
-      if request.post? && request.path == hook_path
+      if request.post? && request.path == @hook_path
         process(request)
       else
         @app.call(env)
@@ -70,17 +70,17 @@ module Thrift
       logger = Thrift::Rack::Middleware::Logger.new(request.env).or(@logger).create!
 
       rpc_method = parse_rpc_method(request)
-      logger.log_method_name(rpc_method)
+      logger.log_method_name(@hook_path, rpc_method)
 
       output = StringIO.new
       transport = IOStreamTransport.new(request.body, output)
       protocol = @protocol_factory.get_protocol(transport)
 
-      logger.log_processing_time(rpc_method) do
+      logger.log_processing_time(@hook_path, rpc_method) do
         begin
           @processor.process(protocol, protocol)
         rescue
-          logger.log_error($!, request, output)
+          logger.log_error($!, request)
         end
       end
 
