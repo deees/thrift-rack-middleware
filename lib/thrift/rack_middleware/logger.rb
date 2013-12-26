@@ -29,15 +29,15 @@ module Thrift
           self
         end
 
-        def log_processing_time(hook_path, rpc_method, &block)
+        def processing_time(hook_path, rpc_method, &block)
           time = Benchmark.realtime &block
           @logger.info "Completed #{hook_path}##{rpc_method} in #{time_to_readable(time)}"
         end
 
-        def log_error(error, request)
+        def error(error, request)
           @logger.error "Error processing thrift request"
           request.body.rewind
-          @logger.error "  request body: '#{request.body.read}'"
+          @logger.error "  request body: '#{binary_to_readable(request.body.read)}'"
 
           @logger.error error
           @logger.error error.backtrace.join("\n\t")
@@ -45,7 +45,7 @@ module Thrift
           raise error # reraise the error
         end
 
-        def log_method_name(hook_path, rpc_method)
+        def method_name(hook_path, rpc_method)
           @logger.info "Called #{hook_path}##{rpc_method}"
         end
 
@@ -53,6 +53,10 @@ module Thrift
 
         def time_to_readable(time)
           time >= 1 ? "#{time.round(3)}s" : "#{(time * 1000).round}ms"
+        end
+
+        def binary_to_readable(input)
+          input.gsub(/[^[:print:]]/) { |x| "\\#{x.ord}" }
         end
       end
     end
