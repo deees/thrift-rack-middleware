@@ -96,8 +96,8 @@ module Thrift
 
     # Try to parse the method called from the request body
     def parse_rpc_method(request)
-      rpc_method_match = request.body.read.match(/(?<method_name>[a-z_0-9]+)/i)
-      rpc_method = rpc_method_match ? rpc_method_match[:method_name] : 'UNKNOWN'
+      rpc_method_match = request.body.read.match(/([a-z_0-9]+)/i)
+      rpc_method = rpc_method_match ? rpc_method_match[1] : 'UNKNOWN'
       request.body.rewind
       rpc_method
     end
