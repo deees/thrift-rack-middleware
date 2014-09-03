@@ -9,14 +9,16 @@ Accessing the handler applications via thrift this was may not be the fastest, b
 
 ## Usage
 
-If you want to add this middleware to a Rails application, add the following to your config/application.rb
+If you want to add this middleware to a Rails application, add the following to your `config/application.rb`
 
-    handler = ThriftHandler.new
-    processor = MyThrift::Processor.new(handler)
-    config.middleware.insert_before Rails::Rack::Metal, Thrift::RackMiddleware,
-                                                        processor: processor,
-                                                        hook_path: '/thrift_rpc',
-                                                        protocol_factory: Thrift::BinaryProtocolAcceleratedFactory.new
+```ruby
+handler = ThriftHandler.new
+processor = MyThrift::Processor.new(handler)
+config.middleware.use Thrift::RackMiddleware,
+                      processor: processor,
+                      hook_path: '/thrift_rpc',
+                      protocol_factory: Thrift::BinaryProtocolAcceleratedFactory.new
+```
 
 ### Defaults
 
@@ -26,7 +28,7 @@ If you want to add this middleware to a Rails application, add the following to 
 
 #### Logging
 You can optionally pass in a custom logger instance. If your application is a
-Rails application, Rails.logger will automatically be used. If your application
+Rails application, `Rails.logger` will automatically be used. If your application
 is a Rack application, rack logger will automatically be used. Otherwise, logging
 will be directed to STDOUT
 
